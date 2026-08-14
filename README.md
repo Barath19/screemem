@@ -95,7 +95,8 @@ GitHub issues (JSON) ─┘        + provenance                      │
                                                     embeddings in Qdrant
                                                                  │
    /meridian-ask ──→ router picks a SearchType ──→ cognee.recall() ──→ answer
-                     (see query.py)              include_references=True   + citations
+                     (see query.py)          + a concurrent only_context=True   + citations
+                                               call for the evidence
 ```
 
 Four decisions carry most of the weight:
@@ -136,11 +137,41 @@ not a structural fix."
 
 We keep that check but demote it to one signal of two. An answer is reported as
 **ungrounded** when it either reads like a refusal *or* came back with no
-supporting graph references at all (`recall(include_references=True)`). The
-second condition is structural: it asks whether retrieval found evidence, not
-whether the prose sounds confident. Answers arrive with a `Grounded in:` footer
+supporting graph references at all. The second condition is structural: it asks
+whether retrieval found evidence, not whether the prose sounds confident.
+
+Getting that evidence took a detour. `recall(include_references=True)` exists in
+1.5.0.dev1 but populates nothing for `GRAPH_COMPLETION` — the result's `raw`
+payload comes back as bare `{"value": "<answer>"}`. So the evidence comes from a
+second `recall(only_context=True)`, which returns the nodes retrieval actually
+surfaced and skips the completion call. It runs concurrently with the answer via
+`asyncio.gather`, so it costs no wall-clock latency. Citations are then parsed
+out of that context by matching the provenance headers ingest wrote into every
+document — which is the second reason those headers are not optional. Answers arrive with a `Grounded in:` footer
 listing the threads and issues behind them, and ungrounded ones are labelled in
 the reply rather than presented as recollection.
+
+## Cognee Cloud (optional)
+
+The graph is built locally against Qdrant, then shipped to Cognee Cloud as a
+finished artifact:
+
+```bash
+export COGNEE_SERVICE_URL="https://<tenant>.aws.cognee.ai"
+export COGNEE_API_KEY="..."
+.venv/bin/python push_to_cloud.py
+```
+
+`push()` exports the already-built graph as a COGX archive and imports it
+remotely, so the cloud does no extraction work. The alternative, `sync()`, ships
+raw data and makes the remote instance rebuild the graph — paying for extraction
+twice and yielding a second, subtly different graph.
+
+Local stays the source of truth deliberately. Cognee Cloud manages its own
+storage, so building there would hide Qdrant entirely; this way Qdrant does the
+vector search and the cloud copy is for sharing and for browsing the graph in a
+UI. The cloud REST API authenticates with an `X-Api-Key` header (not
+`Authorization: Bearer`, which returns `401 Invalid header`).
 
 ## Files
 
@@ -152,6 +183,7 @@ the reply rather than presented as recollection.
 | `ask.py` | CLI access to the same memory. Demo insurance if Slack misbehaves |
 | `app.py` | FastAPI Slack endpoint: signature check, 3s ack, background answer |
 | `visualize.py` | `graph.html` + per-node-type counts |
+| `push_to_cloud.py` | Ship the built graph to Cognee Cloud via COGX |
 | `corpus/` | Seeded Slack export and GitHub issues (see below) |
 
 ## About the corpus
@@ -188,5 +220,11 @@ so a full workspace export is tens of minutes of ingest.
   multiple apps claim the same command and shows a disambiguation dropdown, so at
   an event where many teams install from the same manifest your `/cognee-ask` can
   silently reach someone else's laptop.
+- **`app.py` and `ask.py` cannot run at the same time.** A running cognee
+  process holds an exclusive lock on the Ladybug graph store via a worker
+  subprocess, so the second process fails with `Could not set lock on file`.
+  `query.py` detects this and says so instead of reporting it as an empty
+  memory — collapsing a failure into "nothing in memory covers that" is
+  exactly the confusion this project argues against.
 - **Stop the server before deleting a dataset.** A running cognee backend holds
   an exclusive lock on the graph database via a worker subprocess.
