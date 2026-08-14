@@ -42,10 +42,15 @@ async def main() -> None:
 
     print(f"pushing dataset '{DATASET}' -> {url}")
     result = await cognee.push(dataset=DATASET, target_dataset=DATASET)
-    print(
-        f"status={result.status} nodes={result.nodes} edges={result.edges}\n"
-        f"pipeline_run_id={result.pipeline_run_id}"
-    )
+
+    # PushResult's shape is not stable across runs — an incremental push omits
+    # `nodes`/`edges` that a first full push includes. Report whatever came back
+    # rather than crashing after the upload has already happened.
+    fields = getattr(result, "__dict__", None) or {}
+    if not fields:
+        fields = {k: getattr(result, k) for k in ("status", "dataset", "target")
+                  if hasattr(result, k)}
+    print(" ".join(f"{k}={v}" for k, v in fields.items() if v is not None))
     print(
         "\nThe import runs asynchronously on the remote side — 'started' means "
         "accepted, not finished. Confirm with:\n"

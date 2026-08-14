@@ -1,0 +1,25 @@
+diff --git a/Sources/GenieLM/main.swift b/Sources/GenieLM/main.swift
+index 0b8f5b0..84f7ff3 100644
+--- a/Sources/GenieLM/main.swift
++++ b/Sources/GenieLM/main.swift
+@@ -387,6 +387,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
+         overlay.setStatus("THINKING...")
+         RetroSound.submit()
+ 
++        // screemem: note whether this turn actually carried a screenshot, so the
++        // bridge can skip text-only follow-ups that observe nothing new.
++        let turnHadImage = history.isEmpty && pendingImageB64 != nil
++
+         if history.isEmpty {
+             history.append(LlamaClient.ChatMessage(role: "system", content: systemPrompt, images: nil))
+             history.append(LlamaClient.ChatMessage(role: "user", content: question, images: pendingImageB64.map { [$0] }))
+@@ -406,6 +410,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
+                 overlay.render(transcript: transcript)
+                 overlay.setStatus("GENIELM")
+                 RetroSound.answer()
++                // screemem: keep what was seen. Fire-and-forget — if screemem is
++                // not running this is a no-op and the chat is unaffected.
++                MemoryBridge.record(question: question, answer: answer, sawImage: turnHadImage)
+             } catch {
+                 guard sessionActive else { return }
+                 print("[chat] error: \(error.localizedDescription)")

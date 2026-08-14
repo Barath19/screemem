@@ -25,16 +25,16 @@ python screen_memory.py --watch 300
 Then, from Slack: *"what was I working on this afternoon?"* — answered with the
 timestamp it came from.
 
-Inspired by [GenieLM](https://github.com/Barath19/GenieLM), which lets a local
-Gemma vision model look at your screen and answer *right now*. screemem keeps what
-it saw, so the answer survives the moment — and reaches your team.
+A companion macOS menu-bar app can feed the same memory — shake the mouse, ask
+about the screen, and the observation is kept rather than forgotten when the
+bubble closes. See [`genielm/`](genielm/) for that bridge.
 
 **The screenshot never leaves your machine.** Summarisation runs against a local
-`llama-server` (gemma-3-4b + mmproj) on 127.0.0.1:8080 — the same engine GenieLM
-manages. Only the short text summary is stored, and the PNG is deleted
-immediately unless you pass `--keep`. There is deliberately no hosted-vision
-fallback for the image: shipping raw screenshots of someone's screen to an API
-would be one line shorter and considerably worse.
+`llama-server` (gemma-3-4b + mmproj) on 127.0.0.1:8080. Only the short text
+summary is stored, and the PNG is deleted immediately unless you pass `--keep`.
+There is deliberately no hosted-vision fallback for the image: shipping raw
+screenshots of someone's screen to an API would be one line shorter and
+considerably worse.
 
 ## The Slack part, in one question
 

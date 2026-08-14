@@ -4,12 +4,12 @@
     python screen_memory.py --watch 300     # every 5 minutes
     python screen_memory.py --no-store      # summarise and print, store nothing
 
-This is the GenieLM idea pointed at memory instead of chat. GenieLM lets a local
-Gemma vision model look at your screen and answer right now; this keeps what it
-saw, so the answer is still available next week — and to your team, from Slack.
+Screen-grounded chat, pointed at memory instead of at the moment: a local vision
+model looks at your screen and the observation is kept, so the answer is still
+available next week — and to your team, from Slack.
 
-Privacy is the reason it is built this way round. Summarisation runs against
-GenieLM's own local `llama-server` (gemma-3-4b + mmproj) on 127.0.0.1:8080, so
+Privacy is the reason it is built this way round. Summarisation runs against a
+local `llama-server` (gemma-3-4b + mmproj) on 127.0.0.1:8080, so
 **the screenshot never leaves the machine**. Only the short text summary is
 stored, and the PNG is deleted immediately unless --keep is passed. Sending raw
 screenshots to a hosted vision API would be one line shorter and considerably
