@@ -60,6 +60,74 @@ def parse_scope(text: str) -> tuple[str, str | None]:
     return text, None
 
 
+def parse_deep(text: str) -> tuple[str, bool]:
+    """`deep: why did we...` -> ("why did we...", True)"""
+    if text.lower().startswith("deep:"):
+        return text[len("deep:") :].strip(), True
+    return text, False
+
+
+def format_agent_answer(a) -> dict:
+    """Block Kit for the multi-agent pipeline. The plan and the verifier tally are
+    shown deliberately — the point of this path is that its work is inspectable."""
+    plan_lines = "\n".join(
+        f"{i}. `[{s.source}]` {s.sub_question}" for i, s in enumerate(a.plan, 1)
+    )
+    blocks = [
+        {"type": "section", "text": {"type": "mrkdwn", "text": f"*{a.question}*"}},
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"*Retrieval plan*\n{plan_lines}"},
+        },
+        {"type": "section", "text": {"type": "mrkdwn", "text": a.text[:2900]}},
+    ]
+
+    if a.dropped:
+        dropped = "\n".join(f"• {d}" for d in a.dropped[:4])
+        blocks.append(
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"*Dropped — unsupported by evidence:*\n{dropped}",
+                },
+            }
+        )
+
+    if a.references:
+        cited = "\n".join(f"• {r}" for r in a.references)
+        blocks.append(
+            {"type": "section", "text": {"type": "mrkdwn", "text": f"*Grounded in:*\n{cited}"}}
+        )
+
+    if not a.grounded:
+        blocks.append(
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": ":warning: _No claim survived verification — "
+                    "treat this as not known, not as a recollection._",
+                },
+            }
+        )
+
+    blocks.append(
+        {
+            "type": "context",
+            "elements": [
+                {
+                    "type": "mrkdwn",
+                    "text": f"multi-agent · {len(a.plan)} retriever(s) · "
+                    f"{a.supported} claim(s) verified, {a.unsupported} rejected · "
+                    f"{a.seconds:.1f}s",
+                }
+            ],
+        }
+    )
+    return {"response_type": "ephemeral", "blocks": blocks, "text": a.text[:200]}
+
+
 def format_answer(a) -> dict:
     """Slack Block Kit. The provenance footer is the point: an answer you can
     trace back to a thread or an issue is a different object from a chat reply."""
@@ -111,7 +179,16 @@ async def handle_command(command: str, text: str, user_name: str, channel: str) 
         return {"response_type": "ephemeral", "text": f"Usage: `{command} <text>`"}
 
     if command.endswith("-ask"):
-        question, source = parse_scope(text)
+        question, deep = parse_deep(text)
+        question, source = parse_scope(question)
+
+        # The multi-agent path in agents.py is deliberately NOT routed here. It
+        # works, but it can still attribute correctly-verified claims to the wrong
+        # subject when the question names something absent from the memory, and an
+        # invented answer on stage is worse than a missing feature. Reachable via
+        # `ask.py --deep` for experimentation only.
+        del deep
+
         answer = await ask(question, source=source)
         return format_answer(answer)
 

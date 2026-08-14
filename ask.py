@@ -52,6 +52,27 @@ def render(a) -> str:
     return "\n".join(out)
 
 
+def render_agents(a) -> str:
+    flag = "" if a.grounded else f"  {DIM}(ungrounded){RESET}"
+    out = [f"\n{BOLD}Q{RESET} {a.question}{flag}"]
+    out.append(f"{DIM}   multi-agent · {a.seconds:.1f}s{RESET}")
+    out.append(f"\n{DIM}   plan:{RESET}")
+    for i, s in enumerate(a.plan, 1):
+        out.append(f"{DIM}   {i}. [{s.source}] {s.sub_question}  — {s.why}{RESET}")
+    out.append(
+        f"\n{DIM}   verifier: {a.supported} claim(s) supported, "
+        f"{a.unsupported} rejected{RESET}"
+    )
+    out.append(f"\n{a.text}")
+    if a.dropped:
+        out.append(f"\n{DIM}   dropped as unsupported:{RESET}")
+        out += [f"{DIM}   - {d}{RESET}" for d in a.dropped]
+    if a.references:
+        out.append(f"\n{DIM}   sources:{RESET}")
+        out += [f"{DIM}   - {r}{RESET}" for r in a.references]
+    return "\n".join(out)
+
+
 async def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("question", nargs="*", help="the question to ask")
@@ -59,6 +80,11 @@ async def main() -> None:
     ap.add_argument("--type", dest="force_type", help="override the routed SearchType")
     ap.add_argument("--demo", action="store_true", help="run the scripted demo questions")
     ap.add_argument("--explain", action="store_true", help="show routing only, ask nothing")
+    ap.add_argument(
+        "--deep",
+        action="store_true",
+        help="multi-agent pipeline: planner -> parallel retrievers -> verifier",
+    )
     args = ap.parse_args()
 
     question = " ".join(args.question).strip()
@@ -81,9 +107,14 @@ async def main() -> None:
             return
 
         if not question:
-            sys.exit('usage: python ask.py "your question"   (or --demo)')
+            sys.exit('usage: python ask.py "your question"   (or --demo, --deep)')
 
-        print(render(await ask(question, source=args.source, force_type=args.force_type)))
+        if args.deep:
+            from agents import ask_with_agents
+
+            print(render_agents(await ask_with_agents(question)))
+        else:
+            print(render(await ask(question, source=args.source, force_type=args.force_type)))
     except RetrievalFailed as exc:
         sys.exit(f"\nretrieval failed:\n{exc}")
 
