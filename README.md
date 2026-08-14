@@ -1,14 +1,42 @@
-# Meridian Memory — cross-source memory for Slack
+# screemem — your screen and your Slack, as one memory
 
-A Slack bot that answers questions **whose answers are not in Slack**.
+**screemem** watches what you actually work on, remembers it, and lets your team
+ask about it from Slack — alongside the Slack threads and GitHub issues it already
+knows.
 
-Slack threads and GitHub issues are ingested into a single cognee knowledge
-graph, backed by Qdrant for vector search. Because both sources live in one
-graph rather than two indexes, a question phrased entirely in Slack's words can
-be answered from a GitHub issue — and the answer comes back with the threads and
-issues it was grounded in.
+Three sources, one cognee knowledge graph, Qdrant underneath for vector search:
 
-## The demo, in one question
+| Source | What it contributes |
+|---|---|
+| **Your screen** | what you were doing, when — captured locally, summarised by an on-device vision model |
+| **Slack export** | who said what, when, and what nobody knew at the time |
+| **GitHub issues** | the reasoning: decisions, blockers, owners, costs |
+
+Because all three live in one graph, a question asked in one source's words can be
+answered from another's.
+
+## The screen part
+
+```bash
+python screen_memory.py            # capture now, summarise, remember
+python screen_memory.py --watch 300
+```
+
+Then, from Slack: *"what was I working on this afternoon?"* — answered with the
+timestamp it came from.
+
+Inspired by [GenieLM](https://github.com/Barath19/GenieLM), which lets a local
+Gemma vision model look at your screen and answer *right now*. screemem keeps what
+it saw, so the answer survives the moment — and reaches your team.
+
+**The screenshot never leaves your machine.** Summarisation runs against a local
+`llama-server` (gemma-3-4b + mmproj) on 127.0.0.1:8080 — the same engine GenieLM
+manages. Only the short text summary is stored, and the PNG is deleted
+immediately unless you pass `--keep`. There is deliberately no hosted-vision
+fallback for the image: shipping raw screenshots of someone's screen to an API
+would be one line shorter and considerably worse.
+
+## The Slack part, in one question
 
 Ask this scoped to Slack only:
 
@@ -28,12 +56,12 @@ Now drop the scope:
 ```
 
 Now it answers: PgBouncer transaction-mode pooling breaks against Neon's
-connection proxy for ~15% of query paths, and branch computes do not scale to
-zero, so the projection went from $400 to $1,900/month — 4.75x over the approved
-threshold. That reasoning exists only in GitHub issue #412.
+connection proxy, and branch computes do not scale to zero, so the projection
+went from $400 to $1,900/month — 4.75x over the approved threshold. That
+reasoning exists only in GitHub issue #412.
 
 No keyword search over Slack can produce that answer, because the words are not
-in Slack. That is the entire point of the project.
+in Slack.
 
 ## Setup
 
@@ -203,6 +231,7 @@ graph and, again, gets a confident invention rather than an error.
 | `ask.py` | CLI access to the same memory. Demo insurance if Slack misbehaves |
 | `app.py` | FastAPI Slack endpoint: signature check, 3s ack, background answer |
 | `visualize.py` | `graph.html` + per-node-type counts |
+| `screen_memory.py` | screen capture -> on-device vision summary -> graph |
 | `push_to_cloud.py` | Ship the built graph to Cognee Cloud via COGX |
 | `corpus/` | Seeded Slack export and GitHub issues (see below) |
 

@@ -126,7 +126,11 @@ _CITATION = re.compile(
     r"|Slack thread in #[\w-]+, [^\n.]{0,60}"
     # Facts added live via /meridian-remember carry this header instead of a
     # thread header, so they are citable on the same footing as exported history.
-    r"|Fact recorded in Slack on [^\n.]{0,60})"
+    r"|Fact recorded in Slack on [^\n.]{0,60}"
+    # Screen observations captured by screen_memory.py. Citable for the same
+    # reason: you should be able to see that an answer came from your own screen
+    # at a specific time rather than from a teammate's message.
+    r"|Screen observation on [^\n.]{0,60})"
 )
 
 
