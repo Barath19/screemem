@@ -22,7 +22,7 @@ import aiohttp
 import certifi
 import uvicorn
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from memory import DATASET, SOURCE_SLACK, setup
 from query import ask
@@ -281,7 +281,103 @@ async def remember_screen(request: Request):
 
     await cognee.add(document, dataset_name=DATASET, node_set=["screen", "manual"])
     await cognee.cognify(datasets=[DATASET], chunk_size=2048)
-    return {"ok": True, "stored": len(document), "app": app_name, "when": when}
+
+    result = {"ok": True, "stored": len(document), "app": app_name, "when": when}
+
+    # "add to cognee cloud" mirrors the freshly-built graph up to the tenant so it
+    # is visible in the Cloud UI. The local graph stays the source of truth: push()
+    # ships nodes and edges but not the vector index, so the cloud copy is for
+    # looking at, not for querying — a cloud-side question retrieves nothing and
+    # the remote LLM answers from thin air.
+    if body.get("push"):
+        if not (os.environ.get("COGNEE_SERVICE_URL") and os.environ.get("COGNEE_API_KEY")):
+            result["push"] = "skipped: COGNEE_SERVICE_URL / COGNEE_API_KEY not set"
+        else:
+            try:
+                pushed = await cognee.push(dataset=DATASET, target_dataset=DATASET)
+                fields = getattr(pushed, "__dict__", {}) or {}
+                result["push"] = {
+                    k: v for k, v in fields.items()
+                    if k in ("status", "num_nodes", "num_edges", "dataset_name")
+                }
+            except Exception as exc:  # never fail the local write because the cloud failed
+                result["push"] = f"failed: {exc}"
+
+    return result
+
+
+@app.get("/memory")
+async def browse_memory():
+    """Every document in the memory, newest source first, as a plain page.
+
+    Exists because the stored text is otherwise only visible by querying Qdrant
+    by hand. Reads the vector store directly rather than the graph so it works
+    while the graph lock is held by this same process.
+    """
+    import html as _html
+    import json as _json
+    import urllib.request as _u
+
+    req = _u.Request(
+        "http://localhost:6333/collections/DocumentChunk_text/points/scroll",
+        data=_json.dumps({"limit": 500, "with_payload": True}).encode(),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        points = _json.load(_u.urlopen(req, timeout=20))["result"]["points"]
+    except Exception as exc:
+        return HTMLResponse(f"<pre>could not read Qdrant: {_html.escape(str(exc))}</pre>", 500)
+
+    buckets: dict[str, list[str]] = {
+        "Screen observations": [],
+        "Slack threads": [],
+        "GitHub issues": [],
+        "Added manually": [],
+    }
+    for p in points:
+        text = (p.get("payload", {}).get("text") or "").strip()
+        if not text:
+            continue
+        if text.startswith(("Screen observation", "Added to cognee")):
+            buckets["Screen observations"].append(text)
+        elif text.startswith("Slack thread"):
+            buckets["Slack threads"].append(text)
+        elif text.startswith("GitHub issue"):
+            buckets["GitHub issues"].append(text)
+        else:
+            buckets["Added manually"].append(text)
+
+    css = """
+    :root { color-scheme: light dark }
+    body { font: 15px/1.55 ui-sans-serif,-apple-system,Segoe UI,sans-serif;
+           max-width: 60rem; margin: 2rem auto; padding: 0 1.25rem }
+    h1 { font-size: 1.5rem; margin-bottom: .25rem }
+    .sub { opacity:.65; margin-bottom: 2rem }
+    h2 { font-size: 1.05rem; margin: 2rem 0 .75rem; padding-bottom:.35rem;
+         border-bottom: 1px solid color-mix(in oklab, currentColor 20%, transparent) }
+    .count { opacity:.55; font-weight: 400 }
+    article { border: 1px solid color-mix(in oklab, currentColor 15%, transparent);
+              border-radius: 10px; padding: .85rem 1rem; margin-bottom: .7rem }
+    article.screen { border-color: color-mix(in oklab, #16a34a 55%, transparent) }
+    pre { white-space: pre-wrap; word-wrap: break-word; margin: 0; font: inherit }
+    """
+
+    parts = [
+        f"<style>{css}</style>",
+        "<h1>screemem — everything in the memory</h1>",
+        f"<div class=sub>{len(points)} documents · one cognee graph · "
+        "vector search in Qdrant · text only, no images are ever stored</div>",
+    ]
+    for title, docs in buckets.items():
+        if not docs:
+            continue
+        cls = " class=screen" if title == "Screen observations" else ""
+        parts.append(f"<h2>{title} <span class=count>· {len(docs)}</span></h2>")
+        for d in sorted(docs, reverse=True):
+            parts.append(f"<article{cls}><pre>{_html.escape(d)}</pre></article>")
+
+    return HTMLResponse("\n".join(parts))
 
 
 @app.get("/health")
