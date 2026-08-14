@@ -1,0 +1,86 @@
+[
+  {
+    "number": 388,
+    "title": "Spike: branch-per-PR databases on Neon",
+    "state": "closed",
+    "created_at": "2026-02-10",
+    "closed_at": "2026-03-24",
+    "author": "priya",
+    "assignees": ["priya"],
+    "labels": ["infra", "spike"],
+    "body": "Evaluate Neon as a replacement for the shared staging Postgres instance. Success criteria: a database branch per open pull request, torn down on merge, at under 500 USD/month, with no application code changes to our PgBouncer transaction-mode pooling setup.",
+    "comments": [
+      { "author": "priya", "created_at": "2026-02-24", "body": "Branch creation and teardown works and is fast, under 3 seconds via the API. CI integration is a 40-line job. The mechanics are not the problem." },
+      { "author": "priya", "created_at": "2026-03-11", "body": "Two problems surfaced under real load and both are structural rather than tuning issues. Writing them up in the postmortem issue." }
+    ]
+  },
+  {
+    "number": 412,
+    "title": "Postmortem: pausing the Neon staging migration",
+    "state": "open",
+    "created_at": "2026-03-24",
+    "author": "priya",
+    "assignees": ["priya"],
+    "labels": ["infra", "decision", "postmortem"],
+    "body": "This is the writeup owed to #eng for why branch-per-PR databases on Neon are paused as of 2026-03-16. Two blockers, neither of which we can engineer around at our current size.\n\nBlocker 1 — connection pooling. Our application relies on PgBouncer in transaction mode. Neon's own connection proxy terminates and re-establishes sessions in a way that breaks transaction-mode pooling for prepared statements, so about 15 percent of our query paths error out under a branch database. The fix is either running PgBouncer inside our VPC in front of every branch endpoint, which defeats the operational simplicity that motivated the migration, or removing our dependence on prepared statements, which is a multi-quarter application change.\n\nBlocker 2 — cost. The 400 USD/month estimate assumed branch computes scale to zero when idle. They do not, for branches specifically. Every open pull request keeps a warm compute for as long as the branch exists, and our median PR is open for 4.2 days. Measured projection at our actual branch volume is 1,900 USD/month, which is 4.75x the estimate and above the threshold Jonas approved.\n\nDecision: paused, not abandoned. Revisit when Neon ships scale-to-zero for branch computes, which their public roadmap lists but does not date. Staging returns to the single shared Postgres instance in the meantime. Do not build tooling that assumes per-branch databases exist — this affects the seed-data work Tom was about to start.",
+    "comments": [
+      { "author": "jonas", "created_at": "2026-03-25", "body": "Agreed with the pause. The cost number alone would have been enough. Thanks for writing it up properly rather than leaving it in a Slack thread." },
+      { "author": "marcus", "created_at": "2026-03-26", "body": "Worth capturing that blocker 1 is the more interesting one long term. Our prepared-statement dependence constrains any future managed-Postgres move, not just this one." }
+    ]
+  },
+  {
+    "number": 451,
+    "title": "Rate limiter rewrite: fixed-window to sliding-window with per-endpoint budgets",
+    "state": "open",
+    "created_at": "2026-04-22",
+    "author": "marcus",
+    "assignees": ["marcus"],
+    "labels": ["backend", "blocked", "customer-impact"],
+    "body": "The current limiter is a fixed-window counter keyed on API key alone. Two consequences we keep paying for: a bulk import consumes the entire per-minute budget in the first few seconds and starves that customer's interactive traffic, and there is no way to give a slow endpoint a different budget from a cheap one.\n\nPlan: sliding-window log per (API key, endpoint class), with bulk endpoints getting a separate, larger, longer-window budget so an import cannot starve interactive calls.\n\nBLOCKED. The sliding-window log needs Redis sorted-set operations at a throughput our current Redis does not sustain, and our Redis is a single 2-node cluster on a version that predates the commands we need. This depends on the Redis cluster upgrade, which is not scheduled and has not been sized. I cannot give a delivery date until that upgrade has an owner.",
+    "comments": [
+      { "author": "devika", "created_at": "2026-05-13", "body": "Adding customer context: this is the top support driver two months running. Nordwind (renewal September) has filed four tickets, 3312 being the latest. The workaround we give everyone is to split imports under 1000 rows." },
+      { "author": "sara", "created_at": "2026-05-07", "body": "Reclassifying from tech debt to revenue risk. Nordwind's account note names bulk import as their stated churn reason. I am arguing to prioritise this above the driver app pilot." },
+      { "author": "marcus", "created_at": "2026-06-02", "body": "Still blocked. To be explicit, the limiter work itself is about two weeks. The Redis upgrade in front of it is the entire delay." }
+    ]
+  },
+  {
+    "number": 455,
+    "title": "Redis cluster upgrade (unowned)",
+    "state": "open",
+    "created_at": "2026-04-28",
+    "author": "marcus",
+    "assignees": [],
+    "labels": ["infra", "unowned"],
+    "body": "Filed so the dependency in #451 points somewhere real. Our Redis is a 2-node cluster running a version that predates the sorted-set commands the rate limiter rewrite needs. Needs an owner and a sizing estimate. Nobody has picked this up since it was filed.",
+    "comments": [
+      { "author": "jonas", "created_at": "2026-05-14", "body": "If this is what blocks the top support driver, it needs an owner. Taking it to planning." }
+    ]
+  },
+  {
+    "number": 402,
+    "title": "Decision: driver app framework",
+    "state": "open",
+    "created_at": "2026-02-17",
+    "author": "sara",
+    "assignees": ["lena"],
+    "labels": ["mobile", "decision"],
+    "body": "Platform review decided React Native for the driver app: one codebase for Android and iOS, and Lena's prototype met the 120ms barcode scan latency target. Pilot fleet target is Q3, both platforms.\n\nKnown risk logged at decision time: the prototype ran on a Pixel, not the Zebra TC22 handhelds the drivers actually use. Re-test on real hardware before full commitment.\n\nUPDATE 2026-06-11 — REVERSED. See the reversal note below. Per our convention this issue stays the canonical record and links forward rather than being replaced.",
+    "comments": [
+      { "author": "lena", "created_at": "2026-06-11", "body": "Reversing this decision. On the actual Zebra TC22 hardware we measure 380ms per barcode scan against a 120ms target. The cause is React Native bridge overhead per scan event: we assumed scans could be batched across the bridge, but the Zebra scanner SDK emits one native event per scan and every crossing costs. This is structural, not a tuning problem — no amount of optimisation on our side removes the per-event bridge crossing.\n\nNew direction: native Android only for the pilot, which covers the entire pilot fleet. iOS slips out of Q3 and is unscheduled. The web dashboard is unaffected and stays React." },
+      { "author": "jonas", "created_at": "2026-06-12", "body": "Accepted. Noting for the record that the February risk we logged — prototype on the wrong hardware — is exactly the risk that materialised. Worth remembering next time we commit on a prototype." }
+    ]
+  },
+  {
+    "number": 470,
+    "title": "Docs state 1000/min API limit, actual default is 600/min",
+    "state": "open",
+    "created_at": "2026-04-15",
+    "author": "devika",
+    "assignees": [],
+    "labels": ["docs", "customer-impact"],
+    "body": "Two customers have now caught this, Hafenlogistik most recently. The published default rate limit was lowered from 1000/min to 600/min during the November 2025 incident and the documentation was never updated.",
+    "comments": [
+      { "author": "marcus", "created_at": "2026-04-16", "body": "Confirmed, the docs are wrong and the 600 is intentional. Should be folded into the #451 rewrite since per-endpoint budgets change what the documented number even means." }
+    ]
+  }
+]

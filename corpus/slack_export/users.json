@@ -1,0 +1,9 @@
+[
+  { "id": "U01", "name": "priya", "profile": { "real_name": "Priya Raghavan", "title": "Staff Engineer, Infrastructure" } },
+  { "id": "U02", "name": "marcus", "profile": { "real_name": "Marcus Lindqvist", "title": "Backend Engineer" } },
+  { "id": "U03", "name": "tom", "profile": { "real_name": "Tom Okafor", "title": "Frontend Engineer" } },
+  { "id": "U04", "name": "sara", "profile": { "real_name": "Sara Bergmann", "title": "Product Manager" } },
+  { "id": "U05", "name": "devika", "profile": { "real_name": "Devika Nair", "title": "Support Lead" } },
+  { "id": "U06", "name": "jonas", "profile": { "real_name": "Jonas Weber", "title": "Engineering Manager" } },
+  { "id": "U07", "name": "lena", "profile": { "real_name": "Lena Fischer", "title": "Mobile Engineer" } }
+]

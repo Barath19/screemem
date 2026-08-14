@@ -1,0 +1,26 @@
+[
+  {
+    "type": "message", "user": "U07", "ts": "1781166600.000100",
+    "text": "Calling it: the React Native driver app is not going to hit the scan-latency target. We're at 380ms per barcode scan on the Zebra devices, target was 120ms."
+  },
+  {
+    "type": "message", "user": "U06", "ts": "1781166900.000200", "thread_ts": "1781166600.000100",
+    "text": "That's a big reversal from February. What changed in the analysis?"
+  },
+  {
+    "type": "message", "user": "U07", "ts": "1781167200.000300", "thread_ts": "1781166600.000100",
+    "text": "The bridge overhead per scan event. We assumed we could batch scans across the bridge and we can't, the scanner SDK fires one native event per scan and each crossing costs us. It's structural, not a tuning problem."
+  },
+  {
+    "type": "message", "user": "U04", "ts": "1781167500.000400", "thread_ts": "1781166600.000100",
+    "text": "So we're going native. What does that do to the Q3 date?"
+  },
+  {
+    "type": "message", "user": "U07", "ts": "1781167800.000500", "thread_ts": "1781166600.000100",
+    "text": "Android-only native for the pilot, which is all the pilot fleet needs. iOS slips out of Q3. Writing it up on the decision issue."
+  },
+  {
+    "type": "message", "user": "U03", "ts": "1781168100.000600", "thread_ts": "1781166600.000100",
+    "text": "Worth noting the web dashboard stays React, this is only the driver app. I keep having to clarify that."
+  }
+]

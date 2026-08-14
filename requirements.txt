@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+cognee[fastembed] @ git+https://github.com/topoteretes/cognee.git@dev
+anthropic
+certifi
+python-dotenv
+python-multipart
+aiohttp
+
+# cognee-community-vector-adapter-qdrant is installed separately:
+# its pyproject.toml pins an exact `cognee==` version, which fights the dev-branch
+# pin above and would downgrade us to a stale adapter build.
+#   uv pip install --no-deps cognee-community-vector-adapter-qdrant==0.4.0

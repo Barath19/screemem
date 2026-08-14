@@ -1,0 +1,18 @@
+[
+  {
+    "type": "message", "user": "U06", "ts": "1772703000.000100",
+    "text": "Welcome Tom Okafor, joining as a frontend engineer working on the dashboard. Tom, the two people to know first are Priya for anything infra and Devika for what customers are actually complaining about."
+  },
+  {
+    "type": "message", "user": "U03", "ts": "1772703300.000200", "thread_ts": "1772703000.000100",
+    "text": "Thanks! Where do decisions get written down? I've found three docs that all look canonical."
+  },
+  {
+    "type": "message", "user": "U06", "ts": "1772703600.000300", "thread_ts": "1772703000.000100",
+    "text": "Honest answer: decisions live in GitHub issues, discussion lives in Slack, and the docs site is out of date. If you can't find why something is the way it is, ask in #eng."
+  },
+  {
+    "type": "message", "user": "U01", "ts": "1772789400.000400",
+    "text": "Convention reminder since it keeps coming up: if a decision changes, we update the original issue and link forward. We do not open a new issue and let the old one rot."
+  }
+]

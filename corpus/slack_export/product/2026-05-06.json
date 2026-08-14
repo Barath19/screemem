@@ -1,0 +1,18 @@
+[
+  {
+    "type": "message", "user": "U04", "ts": "1778056200.000100",
+    "text": "Nordwind renewal is up in September. Their account note says the bulk import experience is the single thing they'd churn over."
+  },
+  {
+    "type": "message", "user": "U05", "ts": "1778056500.000200", "thread_ts": "1778056200.000100",
+    "text": "Consistent with what I see. Every ticket they file is import-related. They run one 4000-row import every Monday and it fails more often than it succeeds."
+  },
+  {
+    "type": "message", "user": "U04", "ts": "1778056800.000300", "thread_ts": "1778056200.000100",
+    "text": "That makes the limiter rewrite a revenue item, not a tech-debt item. I'm going to argue for repriotising it above the driver app."
+  },
+  {
+    "type": "message", "user": "U06", "ts": "1778057100.000400", "thread_ts": "1778056200.000100",
+    "text": "I'd support that if the blocker is schedulable. Last I heard it was waiting on infra work nobody had sized."
+  }
+]

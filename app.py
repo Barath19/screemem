@@ -1,0 +1,183 @@
+"""Slack front end for the Meridian memory.
+
+    /meridian-ask <question>              ask across every source
+    /meridian-ask slack: <question>       scope to Slack only
+    /meridian-ask github: <question>      scope to GitHub only
+    /meridian-remember <fact>             add something Slack never saw
+
+Commands are namespaced with `meridian-` on purpose. At a hackathon where every
+team installs an app from the same manifest, several apps register the identical
+/cognee-ask command; Slack then shows a disambiguation dropdown and your command
+can silently reach another team's laptop. That failure looks exactly like your
+own backend being broken.
+"""
+
+import hashlib
+import hmac
+import os
+import ssl
+import time
+
+import aiohttp
+import certifi
+import uvicorn
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
+
+from memory import DATASET, SOURCE_SLACK, setup
+from query import ask
+
+setup()
+
+SIGNING_SECRET = os.environ.get("SLACK_SIGNING_SECRET", "")
+# macOS framework Python ships without system CA certs wired up, and aiohttp
+# (unlike httpx) does not bundle certifi. Without this, posting the real answer
+# back to hooks.slack.com dies with SSLCertVerificationError.
+SSL_CONTEXT = ssl.create_default_context(cafile=certifi.where())
+
+app = FastAPI(title="Meridian memory bot")
+
+
+def verify_slack_signature(body: bytes, timestamp: str, signature: str, secret: str) -> bool:
+    if not timestamp or not signature or not secret:
+        return False
+    try:
+        if abs(time.time() - float(timestamp)) > 60 * 5:
+            return False
+    except ValueError:
+        return False
+    basestring = f"v0:{timestamp}:".encode() + body
+    digest = "v0=" + hmac.new(secret.encode(), basestring, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(digest, signature)
+
+
+def parse_scope(text: str) -> tuple[str, str | None]:
+    """`slack: why did we...` -> ("why did we...", "slack")"""
+    for source in ("slack", "github"):
+        prefix = f"{source}:"
+        if text.lower().startswith(prefix):
+            return text[len(prefix) :].strip(), source
+    return text, None
+
+
+def format_answer(a) -> dict:
+    """Slack Block Kit. The provenance footer is the point: an answer you can
+    trace back to a thread or an issue is a different object from a chat reply."""
+    header = f"*{a.question}*"
+    if a.scope:
+        header += f"   _(scoped to {a.scope} only)_"
+
+    blocks = [
+        {"type": "section", "text": {"type": "mrkdwn", "text": header}},
+        {"type": "section", "text": {"type": "mrkdwn", "text": a.text[:2900]}},
+    ]
+
+    if a.references:
+        cited = "\n".join(f"• {r}" for r in a.references)
+        blocks.append(
+            {"type": "section", "text": {"type": "mrkdwn", "text": f"*Grounded in:*\n{cited}"}}
+        )
+
+    if not a.grounded:
+        blocks.append(
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": ":warning: _No supporting evidence in the graph — "
+                    "treat this as a guess, not a recollection._",
+                },
+            }
+        )
+
+    blocks.append(
+        {
+            "type": "context",
+            "elements": [
+                {
+                    "type": "mrkdwn",
+                    "text": f"routed to `{a.search_type}` · {a.seconds:.1f}s · "
+                    f"{len(a.references)} graph reference(s)",
+                }
+            ],
+        }
+    )
+    return {"response_type": "ephemeral", "blocks": blocks, "text": a.text[:200]}
+
+
+async def handle_command(command: str, text: str, user_name: str, channel: str) -> dict:
+    text = text.strip()
+    if not text:
+        return {"response_type": "ephemeral", "text": f"Usage: `{command} <text>`"}
+
+    if command.endswith("-ask"):
+        question, source = parse_scope(text)
+        answer = await ask(question, source=source)
+        return format_answer(answer)
+
+    if command.endswith("-remember"):
+        import cognee
+
+        # Provenance goes into the document text, not just metadata — the graph
+        # extraction is an LLM reading the body, so anything left in metadata is
+        # invisible to it. Same shape ingest.py writes for exported threads.
+        stamped = (
+            f"Fact recorded in Slack on {time.strftime('%A %d %B %Y')} "
+            f"by {user_name} in #{channel}.\n\n{text}"
+        )
+        await cognee.add(stamped, dataset_name=DATASET, node_set=[SOURCE_SLACK, "manual"])
+        await cognee.cognify(datasets=[DATASET])
+        return {
+            "response_type": "ephemeral",
+            "text": f":brain: Remembered, and folded into the graph:\n> {text}",
+        }
+
+    return {"response_type": "ephemeral", "text": f"Unknown command: {command}"}
+
+
+async def run_and_post(command: str, text: str, user_name: str, channel: str, url: str) -> None:
+    try:
+        reply = await handle_command(command, text, user_name, channel)
+    except Exception as exc:  # never leave the user staring at "Working on it..."
+        reply = {"response_type": "ephemeral", "text": f"Something went wrong: {exc}"}
+    async with aiohttp.ClientSession() as session:
+        await session.post(url, json=reply, ssl=SSL_CONTEXT)
+
+
+@app.post("/api/v1/slack/commands")
+async def slack_commands(request: Request, background_tasks: BackgroundTasks):
+    body = await request.body()
+    if not verify_slack_signature(
+        body,
+        request.headers.get("X-Slack-Request-Timestamp", ""),
+        request.headers.get("X-Slack-Signature", ""),
+        SIGNING_SECRET,
+    ):
+        raise HTTPException(status_code=401, detail="invalid signature")
+
+    form = await request.form()
+    command = form.get("command", "")
+    text = form.get("text", "")
+    response_url = form.get("response_url", "")
+    user_name = form.get("user_name", "someone")
+    channel = form.get("channel_name", "unknown")
+
+    # Slack hangs up at 3s. Graph completion takes ~4s and temporal ~40s, so the
+    # real work always goes to the background and comes back via response_url.
+    if response_url:
+        background_tasks.add_task(
+            run_and_post, command, text, user_name, channel, response_url
+        )
+        verb = "Recalling" if command.endswith("-ask") else "Remembering"
+        return JSONResponse({"response_type": "ephemeral", "text": f":brain: {verb}…"})
+
+    return JSONResponse(await handle_command(command, text, user_name, channel))
+
+
+@app.get("/health")
+async def health():
+    return {"ok": True, "dataset": DATASET, "signing_secret_set": bool(SIGNING_SECRET)}
+
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)

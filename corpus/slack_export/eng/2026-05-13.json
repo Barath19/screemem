@@ -1,0 +1,26 @@
+[
+  {
+    "type": "message", "user": "U05", "ts": "1778661000.000100",
+    "text": "Three customers hit 429s on the bulk shipments endpoint this morning. Nordwind got throttled mid-import and lost a 4000-row batch. Who owns the rate limiter?"
+  },
+  {
+    "type": "message", "user": "U01", "ts": "1778661300.000200", "thread_ts": "1778661000.000100",
+    "text": "Marcus is on the limiter rewrite. The current one is the old fixed-window thing that counts per API key, which is why a single bulk import eats the whole budget."
+  },
+  {
+    "type": "message", "user": "U05", "ts": "1778661600.000300", "thread_ts": "1778661000.000100",
+    "text": "Any ETA I can give Nordwind? They're asking whether to reschedule their weekly import."
+  },
+  {
+    "type": "message", "user": "U02", "ts": "1778661900.000400", "thread_ts": "1778661000.000100",
+    "text": "Can't commit to a date. The rewrite needs the Redis cluster upgrade first and that isn't scheduled. Details are on the issue."
+  },
+  {
+    "type": "message", "user": "U05", "ts": "1778662200.000500", "thread_ts": "1778661000.000100",
+    "text": "I'll tell them to split imports under 1000 rows as a workaround. Third time I've given that advice this month."
+  },
+  {
+    "type": "message", "user": "U06", "ts": "1778747400.000600",
+    "text": "For the record, the bulk import 429s are now the top support driver two months running. If the Redis upgrade is the blocker we should schedule the Redis upgrade."
+  }
+]

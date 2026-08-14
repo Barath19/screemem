@@ -1,0 +1,6 @@
+[
+  { "name": "eng", "purpose": { "value": "Engineering discussion for the Meridian platform" } },
+  { "name": "product", "purpose": { "value": "Roadmap, specs, and prioritisation" } },
+  { "name": "support", "purpose": { "value": "Customer issues escalated from the helpdesk" } },
+  { "name": "general", "purpose": { "value": "Company-wide announcements" } }
+]

@@ -1,0 +1,22 @@
+[
+  {
+    "type": "message", "user": "U04", "ts": "1771320600.000100",
+    "text": "Decision from the platform review: the driver app is React Native. One codebase, both platforms, and Lena's prototype hit the scan target on the test device."
+  },
+  {
+    "type": "message", "user": "U07", "ts": "1771320900.000200", "thread_ts": "1771320600.000100",
+    "text": "Caveat I want on the record: the prototype was on a Pixel, not the Zebra TC22 handhelds the drivers actually use. I'd like to re-test on real hardware before we commit fully."
+  },
+  {
+    "type": "message", "user": "U04", "ts": "1771321200.000300", "thread_ts": "1771320600.000100",
+    "text": "Fair. Logged as a risk. We're committing to the direction, not skipping the hardware test."
+  },
+  {
+    "type": "message", "user": "U06", "ts": "1771321500.000400", "thread_ts": "1771320600.000100",
+    "text": "Target is the pilot fleet in Q3, both platforms."
+  },
+  {
+    "type": "message", "user": "U04", "ts": "1771406700.000500",
+    "text": "Roadmap for H1 locked: Neon staging branches, rate limiter rewrite, driver app pilot. In that order of priority."
+  }
+]

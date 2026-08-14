@@ -1,0 +1,26 @@
+[
+  {
+    "type": "message", "user": "U03", "ts": "1773912600.000100",
+    "text": "Is the Neon migration still happening? The staging-branches doc hasn't moved in three weeks and the tracking issue went quiet."
+  },
+  {
+    "type": "message", "user": "U02", "ts": "1773912900.000200", "thread_ts": "1773912600.000100",
+    "text": "I think it's paused? Priya pulled the branch-per-PR job out of CI last Friday but I never saw a reason posted here."
+  },
+  {
+    "type": "message", "user": "U03", "ts": "1773913200.000300", "thread_ts": "1773912600.000100",
+    "text": "Paused or dead? I'm asking because I was about to build the seed-data tooling on top of it and I'd rather not waste the week."
+  },
+  {
+    "type": "message", "user": "U06", "ts": "1773913500.000400", "thread_ts": "1773912600.000100",
+    "text": "Don't start on it yet. Priya said she'd write up where it landed properly rather than dribble it out in Slack. She's putting it in the tracking issue."
+  },
+  {
+    "type": "message", "user": "U03", "ts": "1773913800.000500", "thread_ts": "1773912600.000100",
+    "text": "Ok. Parking it. Would be good to know eventually, this is the second infra thing this quarter that just went silent."
+  },
+  {
+    "type": "message", "user": "U02", "ts": "1773999000.000600",
+    "text": "Staging is back to the single shared Postgres box for now. If you had a branch database, it's gone. Sorry."
+  }
+]

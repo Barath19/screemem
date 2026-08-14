@@ -1,0 +1,26 @@
+[
+  {
+    "type": "message", "user": "U01", "ts": "1770715800.000100",
+    "text": "Kicking off the Neon migration spike this week. Goal is branch-per-PR databases so we stop stepping on each other in staging."
+  },
+  {
+    "type": "message", "user": "U02", "ts": "1770715900.000200", "thread_ts": "1770715800.000100",
+    "text": "This is the thing I've wanted for a year. Staging has been a single shared Postgres since forever and every schema change is a negotiation."
+  },
+  {
+    "type": "message", "user": "U06", "ts": "1770716100.000300", "thread_ts": "1770715800.000100",
+    "text": "What's the rough cost envelope? I don't want to find out in the June invoice."
+  },
+  {
+    "type": "message", "user": "U01", "ts": "1770716400.000400", "thread_ts": "1770715800.000100",
+    "text": "Napkin math says about 400 a month at our branch volume. I'll validate during the spike."
+  },
+  {
+    "type": "message", "user": "U02", "ts": "1770802200.000500",
+    "text": "Reminder that our connection pooling is PgBouncer in transaction mode. Anything we migrate to has to keep working with that or a lot of app code changes."
+  },
+  {
+    "type": "message", "user": "U01", "ts": "1770802500.000600", "thread_ts": "1770802200.000500",
+    "text": "Noted. Adding it to the spike checklist."
+  }
+]

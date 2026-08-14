@@ -1,0 +1,26 @@
+[
+  {
+    "type": "message", "user": "U05", "ts": "1776155400.000100",
+    "text": "Escalating: Nordwind's Monday import failed again. 429 after roughly 1100 rows. This is ticket 3312, fourth of its kind."
+  },
+  {
+    "type": "message", "user": "U02", "ts": "1776155700.000200", "thread_ts": "1776155400.000100",
+    "text": "Same root cause as the others. Fixed-window counter per API key, bulk import burns the whole minute budget in the first few seconds."
+  },
+  {
+    "type": "message", "user": "U05", "ts": "1776156000.000300", "thread_ts": "1776155400.000100",
+    "text": "Understood. What I need is something to tell them that isn't 'split your file'."
+  },
+  {
+    "type": "message", "user": "U05", "ts": "1776241800.000400",
+    "text": "Ticket 3318: Hafenlogistik asking why their API limit is 600/min when the docs say 1000/min. Anyone know if the docs are wrong or the limit is?"
+  },
+  {
+    "type": "message", "user": "U02", "ts": "1776242100.000500", "thread_ts": "1776241800.000400",
+    "text": "Docs are wrong. We dropped the default to 600 during the November incident and never updated them."
+  },
+  {
+    "type": "message", "user": "U05", "ts": "1776242400.000600", "thread_ts": "1776241800.000400",
+    "text": "Filing a docs bug. That's the second customer to catch that."
+  }
+]

@@ -1,0 +1,40 @@
+# Replace <public-host> with your ngrok host in BOTH command URLs before pasting
+# this into api.slack.com/apps -> Create New App -> From an app manifest.
+#
+# Missing one of the two URLs causes `dispatch_failed` for that command only —
+# a confusingly asymmetric failure that looks like a backend bug.
+#
+# Commands are namespaced `meridian-` rather than `cognee-` deliberately: at an
+# event where many teams install an app from the same manifest, Slack lets
+# several apps claim the identical slash command and shows a disambiguation
+# dropdown. Your /cognee-ask can then silently hit another team's laptop.
+display_information:
+  name: Meridian Memory
+  description: Ask your team's Slack and GitHub history a question it can actually answer
+  background_color: "#1F2933"
+features:
+  bot_user:
+    display_name: meridian-memory
+    always_online: false
+  slash_commands:
+    - command: /meridian-ask
+      url: https://<public-host>/api/v1/slack/commands
+      description: Ask the team memory. Prefix with "slack:" or "github:" to scope it
+      usage_hint: "why did we pause the Neon migration?"
+      should_escape: false
+    - command: /meridian-remember
+      url: https://<public-host>/api/v1/slack/commands
+      description: Record a decision Slack never saw
+      usage_hint: "we chose native Android for the driver app pilot"
+      should_escape: false
+oauth_config:
+  scopes:
+    bot:
+      # `commands` is the only scope needed. Replies ride the slash command's
+      # response_url, which Slack delivers on the app's behalf — so there is no
+      # chat.postMessage call, no bot token, and no /invite required.
+      - commands
+settings:
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false

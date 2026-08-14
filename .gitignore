@@ -1,0 +1,8 @@
+.env
+.venv/
+.qdrant_storage/
+graph.html
+__pycache__/
+*.pyc
+.cognee_system/
+.data_storage/
