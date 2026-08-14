@@ -64,6 +64,16 @@ class PlanStep(BaseModel):
 
 
 class Plan(BaseModel):
+    subject: str = Field(
+        ...,
+        description=(
+            "The single main thing the question is about, as a short noun phrase "
+            "using the question's own words — e.g. 'Neon migration', 'rate "
+            "limiter', 'driver app framework'. Not a sentence. This is checked "
+            "against the retrieved evidence to detect questions about things the "
+            "memory has never heard of."
+        ),
+    )
     steps: list[PlanStep] = Field(
         ..., description="Between 1 and 4 steps. Prefer the fewest that cover the question."
     )
@@ -95,6 +105,7 @@ class AgentAnswer:
     question: str
     text: str
     seconds: float
+    subject: str = ""
     plan: list[PlanStep] = field(default_factory=list)
     references: list[str] = field(default_factory=list)
     supported: int = 0
@@ -195,6 +206,39 @@ async def retrieve(step: PlanStep) -> tuple[str, str]:
 
 def _norm(s: str) -> str:
     return " ".join(s.lower().split())
+
+
+# Words that carry no subject identity, so their presence in the evidence proves
+# nothing about whether the memory knows the thing being asked about.
+_GENERIC = {
+    "migration", "migrating", "decision", "decisions", "project", "issue",
+    "problem", "change", "update", "upgrade", "plan", "team", "work", "status",
+    "the", "our", "about", "from", "with", "that", "this", "have", "make",
+}
+
+
+def subject_is_known(subject: str, evidence: str) -> bool:
+    """Does the evidence actually mention the thing the question is about?
+
+    This gate exists because claim-level verification cannot catch a false
+    premise. Asked "what did we decide about migrating to Kubernetes", retrieval
+    returns the Neon migration documents, the verifier correctly confirms every
+    claim about Neon, and the synthesiser then writes "decisions about migrating
+    to Kubernetes included pausing the Neon staging migration". Every individual
+    claim is true; the sentence is fabricated.
+
+    So: strip the generic words from the subject and require at least one
+    identifying word to appear in the evidence. 'Kubernetes' is absent -> refuse.
+    'Neon migration' keeps 'neon', which is present -> proceed.
+    """
+    hay = _norm(evidence)
+    words = [w.strip(".,#") for w in _norm(subject).split()]
+    identifying = [w for w in words if len(w) > 3 and w not in _GENERIC]
+    if not identifying:
+        # Nothing distinctive to check (e.g. subject was "the project"); do not
+        # block on a test that cannot discriminate.
+        return True
+    return any(w in hay for w in identifying)
 
 
 def enforce_quotes(verification: Verification, evidence: str) -> Verification:
@@ -299,6 +343,24 @@ async def ask_with_agents(question: str) -> AgentAnswer:
             grounded=False,
         )
 
+    # Premise gate, before any synthesis. Retrieval always returns its nearest
+    # neighbours, so a question about something absent still comes back with
+    # plausible-looking documents about something else.
+    if not subject_is_known(plan.subject, evidence):
+        return AgentAnswer(
+            question=question,
+            text=(
+                f"Nothing in memory mentions {plan.subject}. "
+                f"Retrieval returned the closest documents it had, but none of them "
+                f"are about {plan.subject}, so there is nothing here to report."
+            ),
+            seconds=time.monotonic() - started,
+            plan=steps,
+            subject=plan.subject,
+            references=refs,
+            grounded=False,
+        )
+
     verification = await verify(question, "\n\n".join(drafts), evidence)
     verification = enforce_quotes(verification, evidence)
     supported = [c for c in verification.claims if c.supported]
@@ -310,6 +372,7 @@ async def ask_with_agents(question: str) -> AgentAnswer:
         question=question,
         text=synthesis.answer,
         seconds=time.monotonic() - started,
+        subject=plan.subject,
         plan=steps,
         references=refs,
         supported=len(supported),

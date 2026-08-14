@@ -106,8 +106,9 @@ def format_agent_answer(a) -> dict:
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": ":warning: _No claim survived verification — "
-                    "treat this as not known, not as a recollection._",
+                    "text": ":warning: _Not a recollection. Either no claim "
+                    "survived verification, or the memory has never heard of the "
+                    "subject at all._",
                 },
             }
         )
@@ -182,12 +183,10 @@ async def handle_command(command: str, text: str, user_name: str, channel: str) 
         question, deep = parse_deep(text)
         question, source = parse_scope(question)
 
-        # The multi-agent path in agents.py is deliberately NOT routed here. It
-        # works, but it can still attribute correctly-verified claims to the wrong
-        # subject when the question names something absent from the memory, and an
-        # invented answer on stage is worse than a missing feature. Reachable via
-        # `ask.py --deep` for experimentation only.
-        del deep
+        if deep:
+            from agents import ask_with_agents
+
+            return format_agent_answer(await ask_with_agents(question))
 
         answer = await ask(question, source=source)
         return format_answer(answer)
