@@ -163,15 +163,35 @@ export COGNEE_API_KEY="..."
 ```
 
 `push()` exports the already-built graph as a COGX archive and imports it
-remotely, so the cloud does no extraction work. The alternative, `sync()`, ships
-raw data and makes the remote instance rebuild the graph — paying for extraction
-twice and yielding a second, subtly different graph.
+remotely, so the cloud does no extraction work.
 
-Local stays the source of truth deliberately. Cognee Cloud manages its own
-storage, so building there would hide Qdrant entirely; this way Qdrant does the
-vector search and the cloud copy is for sharing and for browsing the graph in a
-UI. The cloud REST API authenticates with an `X-Api-Key` header (not
-`Authorization: Bearer`, which returns `401 Invalid header`).
+**What push() does and does not carry — measured, not assumed.** The graph
+transfers (199 nodes / 809 edges landed, and all 21 data items register against
+the remote dataset), but **the vector index does not**. A `CHUNKS` search against
+the pushed dataset — pure vector search, no LLM involved — returns
+`NoDataError: No data found in the system`.
+
+The consequence matters more than it first appears. Because the remote instance
+has its own LLM but no retrievable embeddings for this data, asking it a question
+does not fail. It answers *fluently and wrongly*. Asked why the Neon migration
+was paused, the cloud copy replied "data-integrity errors and significant latency
+spikes" — a sentence that appears nowhere in the corpus and contradicts the
+actual reasons (PgBouncer transaction-mode pooling, and a 4.75x cost overrun).
+
+So: **the cloud copy is for transporting and viewing the graph, not for
+answering questions.** Query the local instance. This repo's grounding check
+exists precisely because of this failure mode — an answer with no retrieved
+evidence behind it is reported as ungrounded rather than presented as a
+recollection, and a cloud-side answer of this kind has no evidence at all.
+
+Local also stays the source of truth for a second reason: Cognee Cloud manages
+its own storage, so building there would hide Qdrant entirely.
+
+The cloud REST API authenticates with an `X-Api-Key` header (not
+`Authorization: Bearer`, which returns `401 Invalid header`). Note also that
+remote `remember()` is asynchronous — it returns `status: "running"` with
+`items_processed: 0`, so a recall issued immediately afterwards queries an empty
+graph and, again, gets a confident invention rather than an error.
 
 ## Files
 
