@@ -114,7 +114,35 @@ def as_document(summary: str, app_name: str, when: datetime) -> str:
     )
 
 
-async def remember(text: str) -> None:
+SERVER = "http://127.0.0.1:8000"
+
+
+def server_up() -> bool:
+    try:
+        with urllib.request.urlopen(f"{SERVER}/health", timeout=2) as r:
+            return r.status == 200
+    except Exception:
+        return False
+
+
+def remember_via_server(summary: str, app_name: str, when: str) -> bool:
+    """Hand the write to app.py, which already holds the graph lock."""
+    body = json.dumps({"summary": summary, "app": app_name, "when": when}).encode()
+    req = urllib.request.Request(
+        f"{SERVER}/api/v1/memory/screen", data=body,
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=300) as r:
+            return json.load(r).get("ok", False)
+    except Exception as e:
+        print(f"  server write failed: {e}")
+        return False
+
+
+async def remember_direct(text: str) -> None:
+    """Write straight to cognee. Only possible when no server is running — a
+    live cognee process holds an exclusive lock on the graph store."""
     import cognee
 
     await cognee.add(text, dataset_name=DATASET, node_set=[SOURCE_SCREEN, "manual"])
@@ -135,13 +163,21 @@ async def once(store: bool, keep: bool) -> str | None:
             print(f"[{datetime.now():%H:%M}] {app_name}: nothing of note, skipped")
             return None
 
-        doc = as_document(summary, app_name, datetime.now())
-        print(f"\n[{datetime.now():%H:%M}] {app_name}\n{summary}\n")
+        now = datetime.now()
+        print(f"\n[{now:%H:%M}] {app_name}\n{summary}\n")
 
         if store:
-            await remember(doc)
-            print("stored in the graph — now answerable from Slack")
-        return doc
+            # Prefer the server: it owns the graph lock, so this is what makes
+            # --watch work at the same time as the Slack bot.
+            if server_up():
+                ok = remember_via_server(summary, app_name,
+                                         now.strftime("%A %d %B %Y at %H:%M"))
+                print("stored via app.py — answerable from Slack" if ok
+                      else "not stored")
+            else:
+                await remember_direct(as_document(summary, app_name, now))
+                print("stored directly (no server running)")
+        return summary
     finally:
         # The image is the sensitive artefact, not the summary. Delete it unless
         # explicitly asked to keep it.

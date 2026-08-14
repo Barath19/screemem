@@ -250,6 +250,40 @@ async def slack_commands(request: Request, background_tasks: BackgroundTasks):
     return JSONResponse(await handle_command(command, text, user_name, channel))
 
 
+@app.post("/api/v1/memory/screen")
+async def remember_screen(request: Request):
+    """Ingest a screen observation.
+
+    This endpoint exists because of the graph lock. A running cognee process
+    holds an exclusive lock on the graph store, so a separate capture loop cannot
+    write while this server is up. Routing writes through the process that
+    already owns the lock lets continuous capture and Slack answering coexist —
+    and gives GenieLM (or anything else) a one-line way to contribute memory.
+
+    Local-only by design: no signature check, so do not expose this port.
+    """
+    body = await request.json()
+    summary = (body.get("summary") or "").strip()
+    if not summary:
+        return JSONResponse({"ok": False, "error": "summary is required"}, status_code=400)
+
+    app_name = (body.get("app") or "unknown").strip()
+    when = body.get("when") or time.strftime("%A %d %B %Y at %H:%M")
+
+    # Same provenance-in-the-text rule as every other ingester here.
+    document = (
+        f"Screen observation on {when}.\n"
+        f"Source: screen capture on this machine, frontmost application {app_name}.\n\n"
+        f"{summary}"
+    )
+
+    import cognee
+
+    await cognee.add(document, dataset_name=DATASET, node_set=["screen", "manual"])
+    await cognee.cognify(datasets=[DATASET], chunk_size=2048)
+    return {"ok": True, "stored": len(document), "app": app_name, "when": when}
+
+
 @app.get("/health")
 async def health():
     return {"ok": True, "dataset": DATASET, "signing_secret_set": bool(SIGNING_SECRET)}
